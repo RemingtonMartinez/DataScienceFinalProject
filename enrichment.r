@@ -1,5 +1,4 @@
 
-```{r setup, include=TRUE}
 library(ChIPseeker)
 library(TxDb.Hsapiens.UCSC.hg38.knownGene)
 library(EnsDb.Hsapiens.v86)
@@ -72,8 +71,11 @@ compKEGG <- compareCluster(geneCluster = genes,
                          pvalueCutoff  = 0.05, 
                          pAdjustMethod = "BH")
 dotplot(compKEGG, showCategory = 20, title = "KEGG Pathway Enrichment Analysis")
-```
 
+
+               
+               
+# failed attempts at using motif enrichment through GADEM and memes was incompatible for the version of R that I was implementing               
 ```{r}
 library(rGADEM)
 library(BSgenome.Hsapiens.UCSC.hg38)
