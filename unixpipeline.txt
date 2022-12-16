@@ -1,0 +1,195 @@
+filesSNSEQ=(
+    SRR11858618 #Healthy1_snATACseq
+    SRR11858619 #Healthy1_snATACseq
+    SRR11858620 #Healthy2_snATACseq
+    SRR11858621 #Healthy2_snATACseq
+    SRR11858622 #Healthy3_snATACseq
+    SRR11858623 #Healthy3_snATACseq
+    SRR11858624 #Healthy4_snATACseq
+    SRR11858625 #Healthy5_snATACseq
+    SRR17764603 #Healthy6_snATACseq
+    SRR17764595 #DN1_snATACseq
+    SRR17764596 #DN1_snATACseq
+    SRR17764600 #DN2_snATACseq
+    SRR17764601 #DN2_snATACseq
+    SRR17764597 #DN3_snATACseq
+    SRR17764598 #DN3_snATACseq
+    SRR17764602 #DN4_snATACseq
+    SRR17764599 #DN5_snATACseq
+    SRR17764592 #DN6_snATACseq
+    SRR17764591 #DN7_snATACseq
+           )
+
+Cattegories=(
+    Healthy1_snATACseq_RUN_1
+    Healthy1_snATACseq_RUN_2
+    Healthy2_snATACseq_RUN_1
+    Healthy2_snATACseq_RUN_2
+    Healthy3_snATACseq_RUN_1
+    Healthy3_snATACseq_RUN_2
+    Healthy4_snATACseq_RUN_1
+    Healthy5_snATACseq_RUN_1
+    Healthy6_snATACseq_RUN_1
+    DN1_snATACseq_RUN_1
+    DN1_snATACseq_RUN_2
+    DN2_snATACseq_RUN_1
+    DN2_snATACseq_RUN_2
+    DN3_snATACseq_RUN_1
+    DN3_snATACseq_RUN_2
+    DN4_snATACseq_RUN_1
+    DN5_snATACseq_RUN_1
+    DN6_snATACseq_RUN_1
+    DN7_snATACseq_RUN_1
+           )
+
+####DOWNLOADING DATA################
+file=${filesSNSEQ[$SLURM_ARRAY_TASK_ID]}
+module load sratoolkit
+fasterq-dump $file -O /scratch/rmm2gq/RNASeqProject/RNASeqData
+###Reference Genome Download###################
+wget https://cf.10xgenomics.com/supp/cell-exp/refdata-gex-GRCh38-2020-A.tar.gz
+tar -xvzf refdata-gex-GRCh38-2020-A.tar.gz
+
+
+#########FastQC################################
+FILE=${RNASeqFiles[$SLURM_ARRAY_TASK_ID]}
+File1=/scratch/rmm2gq/RNASeqProject/RNASeqData/${FILE}_1.fastq
+File2=/scratch/rmm2gq/RNASeqProject/RNASeqData/${FILE}_2.fastq
+module purge
+module load fastqc
+fastqc $File1 --outdir $OUTDIR
+fastqc $File2 --outdir $OUTDIR
+
+
+#######FastP#####################################
+wget http://opengene.org/fastp/fastp
+chmod a+x ./fastp
+FILE=${RNASeqFiles[$SLURM_ARRAY_TASK_ID]}
+File1=/scratch/rmm2gq/RNASeqProject/RNASeqData/${FILE}_1.fastq
+File2=/scratch/rmm2gq/RNASeqProject/RNASeqData/${FILE}_2.fastq
+File3=/scratch/rmm2gq/RNASeqProject/fastpout/${FILE}_1.fastq
+File4=/scratch/rmm2gq/RNASeqProject/fastpout/${FILE}_2.fastq
+./fastp -i $File1 -I $File2 -o $File3 -O $File4
+
+
+#####FastQC for FastP###############################
+FILE=${RNASeqFiles[$SLURM_ARRAY_TASK_ID]}
+File1=/scratch/rmm2gq/RNASeqProject/fastpout/${FILE}_1.fastq
+File2=/scratch/rmm2gq/RNASeqProject/fastpout/${FILE}_2.fastq
+module purge
+module load fastqc
+fastqc $File1 --outdir $OUTDIR
+fastqc $File2 --outdir $OUTDIR
+
+#####STAR Reference##################################
+module load star/2.7.9a
+STAR --runMode genomeGenerate --runThreadN 8 --genomeDir ./STARGenome --genomeFastaFiles refdata-gex-GRCh38-2020-A/fasta/genome.fa  --sjdbGTFfile refdata-gex-GRCh38-2020-A/genes/genes.gtf
+
+#####STAR Alignment #################################
+FILE=${RNASeqFiles[$SLURM_ARRAY_TASK_ID]}
+Category=${Cattegories[$SLURM_ARRAY_TASK_ID]}
+File1=/scratch/rmm2gq/RNASeqProject/fastpout/${FILE}_1.fastq
+File2=/scratch/rmm2gq/RNASeqProject/fastpout/${FILE}_2.fastq
+Genome=/scratch/rmm2gq/RNASeqProject/STARGenome
+module purge
+module load star/2.7.9a
+STAR --runThreadN 16 --genomeDir $Genome --readFilesIn $File1 $File2 --outSAMtype BAM SortedByCoordinate --quantMode TranscriptomeSAM GeneCounts --outFileNamePrefix /scratch/rmm2gq/RNASeqProject/AwignedReads/${Category} --twopassMode Basic
+
+###################Samtools Merge#################################
+c0=/scratch/rmm2gq/RNASeqProject/AwignedReads/${Cattegories[0]}Aligned.sortedByCoord.out.bam
+c1=/scratch/rmm2gq/RNASeqProject/AwignedReads/${Cattegories[1]}Aligned.sortedByCoord.out.bam
+c2=/scratch/rmm2gq/RNASeqProject/AwignedReads/${Cattegories[2]}Aligned.sortedByCoord.out.bam
+c3=/scratch/rmm2gq/RNASeqProject/AwignedReads/${Cattegories[3]}Aligned.sortedByCoord.out.bam
+c4=/scratch/rmm2gq/RNASeqProject/AwignedReads/${Cattegories[4]}Aligned.sortedByCoord.out.bam
+c5=/scratch/rmm2gq/RNASeqProject/AwignedReads/${Cattegories[5]}Aligned.sortedByCoord.out.bam
+c6=/scratch/rmm2gq/RNASeqProject/AwignedReads/${Cattegories[6]}Aligned.sortedByCoord.out.bam
+c7=/scratch/rmm2gq/RNASeqProject/AwignedReads/${Cattegories[7]}Aligned.sortedByCoord.out.bam
+c8=/scratch/rmm2gq/RNASeqProject/AwignedReads/${Cattegories[8]}Aligned.sortedByCoord.out.bam
+u9=/scratch/rmm2gq/RNASeqProject/AwignedReads/${Cattegories[9]}Aligned.sortedByCoord.out.bam
+u10=/scratch/rmm2gq/RNASeqProject/AwignedReads/${Cattegories[10]}Aligned.sortedByCoord.out.bam
+u11=/scratch/rmm2gq/RNASeqProject/AwignedReads/${Cattegories[11]}Aligned.sortedByCoord.out.bam
+u12=/scratch/rmm2gq/RNASeqProject/AwignedReads/${Cattegories[12]}Aligned.sortedByCoord.out.bam
+u13=/scratch/rmm2gq/RNASeqProject/AwignedReads/${Cattegories[13]}Aligned.sortedByCoord.out.bam
+u14=/scratch/rmm2gq/RNASeqProject/AwignedReads/${Cattegories[14]}Aligned.sortedByCoord.out.bam
+u15=/scratch/rmm2gq/RNASeqProject/AwignedReads/${Cattegories[15]}Aligned.sortedByCoord.out.bam
+u16=/scratch/rmm2gq/RNASeqProject/AwignedReads/${Cattegories[16]}Aligned.sortedByCoord.out.bam
+u17=/scratch/rmm2gq/RNASeqProject/AwignedReads/${Cattegories[17]}Aligned.sortedByCoord.out.bam
+u18=/scratch/rmm2gq/RNASeqProject/AwignedReads/${Cattegories[18]}Aligned.sortedByCoord.out.bam
+controlfilename=/scratch/rmm2gq/RNASeqProject/samtoolsout/mergedv3/controlout.bam
+controloutname=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv3/controlout.sorted.bam
+diseasedfilename=/scratch/rmm2gq/RNASeqProject/samtoolsout/mergedv3/diseasedout.bam
+diseasedoutname=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv3/diseasedout.sorted.bam
+module load samtools/1.12 
+samtools merge $controlfilename $c0 $c1 $c2 $c3 $c4 $c5 $c6 $c7 $c8
+samtools merge $diseasedfilename $u9 $u10 $u11 $u12 $u12 $u13 $u14 $u15 $u16 $u17 $u18
+samtools sort -n $controlfilename > $controloutname
+samtools sort -n $diseasedfilename > $diseasedoutname
+
+###########macs2####################################################
+module load macs2/2.2.7.1
+control=/scratch/rmm2gq/RNASeqProject/samtoolsout/mergedv3/controlout.bam
+diseased=/scratch/rmm2gq/RNASeqProject/samtoolsout/mergedv3/diseasedout.bam
+macs2 callpeak -c $control -t $diseased  -f BAMPE  -n pleasesendhelp  -g hs  --keep-dup 1
+
+The following is failed code lines due to memory limitations of the encoded software when attempting to run Genrich on larger compiled bam files:
+
+####Genrich######
+#pip install GitPython #if you not already installed
+from git import Repo
+Repo.clone_from(r"https://github.com/jsh58/Genrich", r"/scratch/rmm2gq/RNASeqProject/Genrichy")
+!module load gcc
+!gcc -g -Wall -std=gnu99 -O2 -o Genrich /scratch/rmm2gq/RNASeqProject/Genrichy/Genrich.c -lz -lm
+
+
+#Genrich call peaks separately as merged files would repeatedly fail due to memory allocation limitations even when using largemem within sbatch
+
+Category=${Cattegories[$SLURM_ARRAY_TASK_ID]}
+filename=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv4/${Category}.sorted.bam
+outfilename=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv4/GenrichOutputs/peaks/${Category}.narrowPeak
+bedfilename=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv4/GenrichOutputs/bed/${Category}.bed
+/scratch/rmm2gq/RNASeqProject/Genrich -j -t $filename -o $outfilename -b $bedfilename -r -v -e chrM -q 0.05
+
+#Homer 
+c0=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv4/GenrichOutputs/bed/${Cattegories[0]}.bed
+c1=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv4/GenrichOutputs/bed/${Cattegories[1]}.bed
+c2=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv4/GenrichOutputs/bed/${Cattegories[2]}.bed
+c3=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv4/GenrichOutputs/bed/${Cattegories[3]}.bed
+c4=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv4/GenrichOutputs/bed/${Cattegories[4]}.bed
+c5=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv4/GenrichOutputs/bed/${Cattegories[5]}.bed
+c6=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv4/GenrichOutputs/bed/${Cattegories[6]}.bed
+c7=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv4/GenrichOutputs/bed/${Cattegories[7]}.bed
+c8=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv4/GenrichOutputs/bed/${Cattegories[8]}.bed
+u9=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv4/GenrichOutputs/bed/${Cattegories[9]}.bed
+u10=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv4/GenrichOutputs/bed/${Cattegories[10]}.bed
+u11=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv4/GenrichOutputs/bed/${Cattegories[11]}.bed
+u12=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv4/GenrichOutputs/bed/${Cattegories[12]}.bed
+u13=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv4/GenrichOutputs/bed/${Cattegories[13]}.bed
+u14=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv4/GenrichOutputs/bed/${Cattegories[14]}.bed
+u15=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv4/GenrichOutputs/bed/${Cattegories[15]}.bed
+u16=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv4/GenrichOutputs/bed/${Cattegories[16]}.bed
+u17=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv4/GenrichOutputs/bed/${Cattegories[17]}.bed
+u18=/scratch/rmm2gq/RNASeqProject/samtoolsout/sortedv4/GenrichOutputs/bed/${Cattegories[18]}.bed
+
+wget http://homer.ucsd.edu/homer/configureHomer.pl
+module load perl/5.24.0
+perl configureHomer.pl -install
+
+#Homer Methodology (failed due to software limitations in encoding and reference calling dependencies)
+
+cd /scratch/rmm2gq/RNASeqProject/Homer/bin
+
+./mergePeaks -d 100 $c0 $c1 $c2 $c3 $c4 $c5 $c6 $c7 $c8 $c9 > /scratch/rmm2gq/RNASeqProject/newcontrolPeakFile.txt
+
+./mergePeaks -d 100 $u9 $u10 $u11 $u12 $u13 $u14 $u15 $u16 $u17 $u18 > /scratch/rmm2gq/RNASeqProject/newPeakFile.txt
+
+./makeTagDirectory /scratch/rmm2gq/RNASeqProject/Homerout/diseased $u9 $u10 $u11 $u12 $u13 $u14 $u15 $u16 $u17 $u18 -format bed -genome hg38 -single
+
+./makeTagDirectory /scratch/rmm2gq/RNASeqProject/Homerout/control $c0 $c1 $c2 $c3 $c4 $c5 $c6 $c7 $c8 $c9 -format bed -genome hg38 -single
+
+./getDifferentialPeaks /scratch/rmm2gq/RNASeqProject/newPeakFile.txt /scratch/rmm2gq/RNASeqProject/Homerout/diseased /scratch/rmm2gq/RNASeqProject/Homerout/control
+
+./findPeaks /scratch/rmm2gq/RNASeqProject/Homerout/diseased -style factor -o auto -i /scratch/rmm2gq/RNASeqProject/Homerout/control
+
+./annotatePeaks.pl /scratch/rmm2gq/RNASeqProject/Homerout/diseased/peakfile.txt hg38 > outputfile.txt
+
+
